@@ -10,7 +10,7 @@ import (
 
 const (
 	PacketSize       = 504
-	packetHeaderSize = 28
+	PacketHeaderSize = 28
 )
 
 var packetMagic = [4]byte{'N', 'R', 'L', 1}
@@ -81,7 +81,7 @@ func ParsePacket(wire []byte) (Packet, error) {
 	k := int(binary.BigEndian.Uint16(wire[20:22]))
 	symbolSize := int(binary.BigEndian.Uint16(wire[22:24]))
 	originalSize := int(binary.BigEndian.Uint32(wire[24:28]))
-	if packetHeaderSize+k+symbolSize > len(wire) {
+	if PacketHeaderSize+k+symbolSize > len(wire) {
 		return Packet{}, errors.New("packet dimensions exceed fixed cell")
 	}
 	p, err := NewPacket(generation, k, symbolSize, originalSize, Symbol{
@@ -125,7 +125,7 @@ func (p Packet) validate() error {
 		uint64(p.OriginalSize) > uint64(^uint32(0)) {
 		return errors.New("packet dimensions exceed wire fields")
 	}
-	if packetHeaderSize+p.K+p.SymbolSize > PacketSize {
+	if PacketHeaderSize+p.K+p.SymbolSize > PacketSize {
 		return errors.New("coded symbol does not fit fixed packet")
 	}
 	capacity := uint64(p.K) * uint64(p.SymbolSize)
