@@ -70,10 +70,16 @@ func TestRandomCodedRoundTrip(t *testing.T) {
 
 func TestReEncodePreservesSpan(t *testing.T) {
 	data := []byte("the quick brown fox jumps over the lazy dog; network coding test")
-	enc, _ := NewEncoder(data, 16)
+	enc, err := NewEncoder(data, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := make([]Symbol, enc.K())
 	for i := range base {
-		base[i], _ = enc.Systematic(i)
+		base[i], err = enc.Systematic(i)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	mixed := make([]Symbol, 0, enc.K()*3)
 	for i := 0; i < enc.K()*3; i++ {
@@ -89,5 +95,53 @@ func TestReEncodePreservesSpan(t *testing.T) {
 	}
 	if !bytes.Equal(got, data) {
 		t.Fatal("re-encoded round-trip mismatch")
+	}
+}
+
+func TestReEncodeRejectsZeroSpan(t *testing.T) {
+	_, err := ReEncode([]Symbol{{Coeff: []byte{0, 0}, Data: []byte{0, 0}}})
+	if err == nil {
+		t.Fatal("expected zero-span error")
+	}
+}
+
+func TestReEncodeNeverReturnsZeroCoefficientVector(t *testing.T) {
+	enc, err := NewEncoder([]byte("non-zero re-encoding test"), 8)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := make([]Symbol, enc.K())
+	for i := range base {
+		base[i], err = enc.Systematic(i)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 1000; i++ {
+		s, err := ReEncode(base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !anyNonZero(s.Coeff) {
+			t.Fatal("re-encoder emitted zero coefficient vector")
+		}
+	}
+}
+
+func TestDecodeRejectsRankDeficientSet(t *testing.T) {
+	enc, err := NewEncoder([]byte("rank deficiency"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	one, err := enc.Systematic(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syms := make([]Symbol, enc.K())
+	for i := range syms {
+		syms[i] = one
+	}
+	if _, err := Decode(syms, enc.K(), enc.OriginalSize()); err == nil {
+		t.Fatal("expected rank-deficiency error")
 	}
 }

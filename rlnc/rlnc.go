@@ -48,14 +48,7 @@ func (e *Encoder) Encode() (Symbol, error) {
 		if _, err := rand.Read(coeff); err != nil {
 			return Symbol{}, err
 		}
-		nonzero := false
-		for _, c := range coeff {
-			if c != 0 {
-				nonzero = true
-				break
-			}
-		}
-		if nonzero {
+		if anyNonZero(coeff) {
 			break
 		}
 	}
@@ -90,42 +83,61 @@ func ReEncode(symbols []Symbol) (Symbol, error) {
 	}
 	k := len(symbols[0].Coeff)
 	size := len(symbols[0].Data)
+	if k == 0 || size == 0 {
+		return Symbol{}, errors.New("empty symbol dimensions")
+	}
+	spanIsNonZero := false
 	for _, s := range symbols {
 		if len(s.Coeff) != k || len(s.Data) != size {
 			return Symbol{}, errors.New("incompatible symbols")
 		}
+		if anyNonZero(s.Coeff) {
+			spanIsNonZero = true
+		}
 	}
-	weights := make([]byte, len(symbols))
-	for {
+	if !spanIsNonZero {
+		return Symbol{}, errors.New("symbols span only the zero vector")
+	}
+
+	// A random linear combination can occasionally cancel to the zero
+	// coefficient vector. Retry rather than emitting a symbol that can never
+	// increase decoder rank.
+	for attempt := 0; attempt < 64; attempt++ {
+		weights := make([]byte, len(symbols))
 		if _, err := rand.Read(weights); err != nil {
 			return Symbol{}, err
 		}
-		nz := false
-		for _, w := range weights {
-			if w != 0 {
-				nz = true
-				break
-			}
-		}
-		if nz {
-			break
-		}
-	}
-	coeff := make([]byte, k)
-	data := make([]byte, size)
-	for i, s := range symbols {
-		w := weights[i]
-		if w == 0 {
+		if !anyNonZero(weights) {
 			continue
 		}
-		for j := range coeff {
-			coeff[j] ^= mul(w, s.Coeff[j])
+		coeff := make([]byte, k)
+		data := make([]byte, size)
+		for i, s := range symbols {
+			w := weights[i]
+			if w == 0 {
+				continue
+			}
+			for j := range coeff {
+				coeff[j] ^= mul(w, s.Coeff[j])
+			}
+			for j := range data {
+				data[j] ^= mul(w, s.Data[j])
+			}
 		}
-		for j := range data {
-			data[j] ^= mul(w, s.Data[j])
+		if anyNonZero(coeff) {
+			return Symbol{Coeff: coeff, Data: data}, nil
 		}
 	}
-	return Symbol{Coeff: coeff, Data: data}, nil
+	return Symbol{}, errors.New("failed to produce a non-zero re-encoded symbol")
+}
+
+func anyNonZero(v []byte) bool {
+	for _, x := range v {
+		if x != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func Decode(symbols []Symbol, k, originalSize int) ([]byte, error) {
@@ -136,6 +148,9 @@ func Decode(symbols []Symbol, k, originalSize int) ([]byte, error) {
 		return nil, errors.New("insufficient symbols")
 	}
 	size := len(symbols[0].Data)
+	if size == 0 {
+		return nil, errors.New("empty symbol data")
+	}
 	rows := make([][]byte, 0, len(symbols))
 	for _, s := range symbols {
 		if len(s.Coeff) != k || len(s.Data) != size {

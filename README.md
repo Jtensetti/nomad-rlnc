@@ -1,32 +1,23 @@
 # nomad-rlnc
 
-A compact, dependency-free Go implementation of **random linear network coding (RLNC)** over GF(2^8) for Nomad research.
+A dependency-free Go implementation of random linear network coding over GF(2^8), used by the Nomad experiments.
 
-Implemented:
+## Implemented
 
 - fixed-size source symbols,
-- systematic symbols,
-- random coded symbols,
-- in-network re-encoding,
+- systematic and random coded symbols,
+- in-network linear re-encoding,
 - Gaussian-elimination decoding,
 - rank-deficiency detection,
-- property-style round-trip tests.
+- rejection of useless zero-span re-encoding.
 
-This is real executable code, but it has not received independent performance or security review. RLNC itself is not encryption; callers must authenticate and encrypt sensitive content separately.
+The implementation is intentionally small and readable. It is not tuned for high-throughput networking and has not received independent review.
 
-## Build
+## Security boundary
+
+RLNC is **not encryption or authentication**. A malicious peer can inject polluted coded symbols unless a higher layer authenticates the coded data/object. Generation identifiers, replay handling, pollution-resistant coding and wire serialization are outside this package.
 
 ```bash
-go test ./...
 go test -race ./...
 go vet ./...
-```
-
-## API sketch
-
-```go
-enc, _ := rlnc.NewEncoder(data, 1024)
-s, _ := enc.Encode()
-re, _ := rlnc.ReEncode([]rlnc.Symbol{s, other})
-plain, err := rlnc.Decode(symbols, enc.K(), enc.OriginalSize())
 ```
