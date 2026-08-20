@@ -151,67 +151,14 @@ func Decode(symbols []Symbol, k, originalSize int) ([]byte, error) {
 	if size == 0 {
 		return nil, errors.New("empty symbol data")
 	}
-	rows := make([][]byte, 0, len(symbols))
+	decoder, err := NewDecoder(k, size, originalSize)
+	if err != nil {
+		return nil, err
+	}
 	for _, s := range symbols {
-		if len(s.Coeff) != k || len(s.Data) != size {
-			return nil, errors.New("incompatible symbols")
-		}
-		row := make([]byte, k+size)
-		copy(row, s.Coeff)
-		copy(row[k:], s.Data)
-		rows = append(rows, row)
-	}
-
-	rank := 0
-	pivots := make([]int, 0, k)
-	for col := 0; col < k && rank < len(rows); col++ {
-		pivot := -1
-		for r := rank; r < len(rows); r++ {
-			if rows[r][col] != 0 {
-				pivot = r
-				break
-			}
-		}
-		if pivot == -1 {
-			continue
-		}
-		rows[rank], rows[pivot] = rows[pivot], rows[rank]
-		scale := inv(rows[rank][col])
-		for c := col; c < len(rows[rank]); c++ {
-			rows[rank][c] = mul(rows[rank][c], scale)
-		}
-		for r := 0; r < len(rows); r++ {
-			if r == rank || rows[r][col] == 0 {
-				continue
-			}
-			factor := rows[r][col]
-			for c := col; c < len(rows[r]); c++ {
-				rows[r][c] = add(rows[r][c], mul(factor, rows[rank][c]))
-			}
-		}
-		pivots = append(pivots, col)
-		rank++
-		if rank == k {
-			break
+		if _, err := decoder.Add(s); err != nil {
+			return nil, err
 		}
 	}
-	if rank < k {
-		return nil, errors.New("rank deficient symbol set")
-	}
-
-	decoded := make([][]byte, k)
-	for r, col := range pivots[:k] {
-		decoded[col] = append([]byte(nil), rows[r][k:]...)
-	}
-	out := make([]byte, 0, k*size)
-	for i := 0; i < k; i++ {
-		if decoded[i] == nil {
-			return nil, errors.New("missing pivot")
-		}
-		out = append(out, decoded[i]...)
-	}
-	if originalSize > len(out) {
-		return nil, errors.New("original size exceeds decoded buffer")
-	}
-	return out[:originalSize], nil
+	return decoder.Decode()
 }
