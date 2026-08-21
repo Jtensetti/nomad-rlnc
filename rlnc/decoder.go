@@ -30,7 +30,7 @@ func NewDecoder(k, symbolSize, originalSize int) (*Decoder, error) {
 	}, nil
 }
 
-func (d *Decoder) Rank() int { return d.rank }
+func (d *Decoder) Rank() int   { return d.rank }
 func (d *Decoder) Ready() bool { return d.rank == d.k }
 
 func (d *Decoder) Add(symbol Symbol) (bool, error) {
